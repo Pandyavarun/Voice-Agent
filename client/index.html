@@ -8,27 +8,42 @@
 </head>
 
 <body>
-<div class="container">
-  <div class="status-bar">
-    <div class="status">
-      Transport: <span id="connection-status">Disconnected</span>
-    </div>
-    <div class="controls">
-      <button id="connect-btn">Connect</button>
-      <button id="disconnect-btn" disabled>Disconnect</button>
-    </div>
+  <div class="app-shell">
+    <header class="top-bar">
+      <div class="left">
+        <span class="brand">Voice Agent</span>
+      </div>
+      <div class="center">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="connection-status">Disconnected</span>
+      </div>
+      <div class="right controls">
+        <button id="theme-toggle" title="Toggle theme">🌙</button>
+        <button id="connect-btn">Connect</button>
+        <button id="disconnect-btn" disabled>Disconnect</button>
+      </div>
+    </header>
+
+    <main class="main-stage">
+      <div class="mic-wrapper">
+        <div id="mic-indicator" class="mic" aria-label="Microphone status" role="img">
+          <svg viewBox="0 0 24 24" class="mic-icon" width="48" height="48" aria-hidden="true">
+            <path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 14 0h-2Zm-5 9a7.002 7.002 0 0 0 6.32-4H16.9a5.002 5.002 0 0 1-9.8 0H5.68A7.002 7.002 0 0 0 12 20Z"/>
+          </svg>
+        </div>
+        <div class="mic-label" id="mic-label">Idle</div>
+      </div>
+      <section class="response-panel" aria-live="polite" aria-atomic="true">
+        <div id="bot-response" class="bot-response-placeholder">Waiting for response...</div>
+      </section>
+      <audio id="bot-audio" autoplay hidden></audio>
+    </main>
+
+    <footer class="foot-note">Built with Pipecat · Gemini multimodal · FastAPI</footer>
   </div>
 
-  <audio id="bot-audio" autoplay></audio>
-
-  <div class="debug-panel">
-    <h3>Debug Info</h3>
-    <div id="debug-log"></div>
-  </div>
-</div>
-
-<script type="module" src="/src/app.ts"></script>
-<link rel="stylesheet" href="/src/style.css">
+  <script type="module" src="/src/app.ts"></script>
+  <link rel="stylesheet" href="/src/style.css">
 </body>
 
 </html>

@@ -1,23 +1,5 @@
-/**
- * Copyright (c) 2024–2025, Daily
- *
- * SPDX-License-Identifier: BSD 2-Clause License
- */
 
-/**
- * Pipecat Client Implementation
- *
- * This client connects to an RTVI-compatible bot server using WebSocket.
- *
- * Requirements:
- * - A running RTVI bot server (defaults to http://localhost:7860)
- */
-
-import {
-  PipecatClient,
-  PipecatClientOptions,
-  RTVIEvent,
-} from '@pipecat-ai/client-js';
+import { PipecatClient, PipecatClientOptions, RTVIEvent } from '@pipecat-ai/client-js';
 import { WebSocketTransport } from '@pipecat-ai/websocket-transport';
 
 class WebsocketClientApp {
@@ -25,8 +7,16 @@ class WebsocketClientApp {
   private connectBtn: HTMLButtonElement | null = null;
   private disconnectBtn: HTMLButtonElement | null = null;
   private statusSpan: HTMLElement | null = null;
-  private debugLog: HTMLElement | null = null;
+  private statusDot: HTMLElement | null = null;
+  private micIndicator: HTMLElement | null = null;
+  private micLabel: HTMLElement | null = null;
+  private botResponse: HTMLElement | null = null;
   private botAudio: HTMLAudioElement;
+  private userSpeaking = false;
+  private userSpeakingTimeout: number | null = null;
+  private botSpeaking = false;
+  private currentAnimation?: number;
+  private lastBotFinal = '';
 
   constructor() {
     console.log('WebsocketClientApp');
@@ -37,20 +27,20 @@ class WebsocketClientApp {
 
     this.setupDOMElements();
     this.setupEventListeners();
+  this.applySavedTheme();
   }
 
   /**
    * Set up references to DOM elements and create necessary media elements
    */
   private setupDOMElements(): void {
-    this.connectBtn = document.getElementById(
-      'connect-btn'
-    ) as HTMLButtonElement;
-    this.disconnectBtn = document.getElementById(
-      'disconnect-btn'
-    ) as HTMLButtonElement;
+    this.connectBtn = document.getElementById('connect-btn') as HTMLButtonElement;
+    this.disconnectBtn = document.getElementById('disconnect-btn') as HTMLButtonElement;
     this.statusSpan = document.getElementById('connection-status');
-    this.debugLog = document.getElementById('debug-log');
+    this.statusDot = document.getElementById('status-dot');
+    this.micIndicator = document.getElementById('mic-indicator');
+    this.micLabel = document.getElementById('mic-label');
+    this.botResponse = document.getElementById('bot-response');
   }
 
   /**
@@ -59,33 +49,93 @@ class WebsocketClientApp {
   private setupEventListeners(): void {
     this.connectBtn?.addEventListener('click', () => this.connect());
     this.disconnectBtn?.addEventListener('click', () => this.disconnect());
+  document.getElementById('theme-toggle')?.addEventListener('click', () => this.toggleTheme());
+  // audio events
+  this.botAudio.addEventListener('playing', () => { this.botSpeaking = true; });
+  this.botAudio.addEventListener('ended', () => { this.botSpeaking = false; this.clearBargeIn(); });
+  this.botAudio.addEventListener('pause', () => { this.botSpeaking = false; this.clearBargeIn(); });
   }
 
   /**
    * Add a timestamped message to the debug log
    */
-  private log(message: string): void {
-    if (!this.debugLog) return;
-    const entry = document.createElement('div');
-    entry.textContent = `${new Date().toISOString()} - ${message}`;
-    if (message.startsWith('User: ')) {
-      entry.style.color = '#2196F3';
-    } else if (message.startsWith('Bot: ')) {
-      entry.style.color = '#4CAF50';
-    }
-    this.debugLog.appendChild(entry);
-    this.debugLog.scrollTop = this.debugLog.scrollHeight;
-    console.log(message);
-  }
+  private log(message: string): void { console.log(message); }
 
   /**
    * Update the connection status display
    */
   private updateStatus(status: string): void {
-    if (this.statusSpan) {
-      this.statusSpan.textContent = status;
+    if (this.statusSpan) this.statusSpan.textContent = status;
+    if (this.statusDot) {
+      this.statusDot.classList.remove('status-connected', 'status-error');
+      if (status === 'Connected') this.statusDot.classList.add('status-connected');
+      else if (status === 'Error') this.statusDot.classList.add('status-error');
     }
     this.log(`Status: ${status}`);
+  }
+
+  private setUserSpeaking(active: boolean) {
+    if (this.userSpeaking === active) return;
+    this.userSpeaking = active;
+    if (this.micIndicator) {
+      this.micIndicator.classList.toggle('listening', active);
+    }
+    if (this.micLabel) this.micLabel.textContent = active ? 'Listening...' : 'Idle';
+    if (active && this.botSpeaking) {
+      this.triggerBargeIn();
+    } else if (!active) {
+      this.clearBargeIn();
+    }
+  }
+
+  private scheduleUserStop(delay = 450) {
+    if (this.userSpeakingTimeout) window.clearTimeout(this.userSpeakingTimeout);
+    this.userSpeakingTimeout = window.setTimeout(() => this.setUserSpeaking(false), delay);
+  }
+
+  private triggerBargeIn() {
+    const panel = document.querySelector('.response-panel');
+    panel?.classList.add('barge-in');
+  }
+  private clearBargeIn() {
+    const panel = document.querySelector('.response-panel');
+    panel?.classList.remove('barge-in');
+  }
+
+  private toggleTheme() {
+    const root = document.documentElement;
+    const current = root.dataset.theme === 'light' ? 'dark' : 'light';
+    root.dataset.theme = current;
+    localStorage.setItem('va-theme', current);
+    const toggleBtn = document.getElementById('theme-toggle');
+    if (toggleBtn) toggleBtn.textContent = current === 'light' ? '☀️' : '🌙';
+  }
+  private applySavedTheme() {
+    const saved = localStorage.getItem('va-theme') || 'dark';
+    document.documentElement.dataset.theme = saved;
+    const toggleBtn = document.getElementById('theme-toggle');
+    if (toggleBtn) toggleBtn.textContent = saved === 'light' ? '☀️' : '🌙';
+  }
+
+  private animateFinalResponse(text: string) {
+    if (!this.botResponse) return;
+    const el = this.botResponse;
+    const full = text;
+    let idx = 0;
+    if (this.currentAnimation) cancelAnimationFrame(this.currentAnimation);
+    const step = () => {
+      idx += Math.max(1, Math.ceil(full.length / 45));
+      el.textContent = full.slice(0, idx);
+      if (idx < full.length) {
+        this.currentAnimation = requestAnimationFrame(step);
+      }
+    };
+    step();
+  }
+
+  private setBotStreaming(active: boolean) {
+    if (!this.botResponse) return;
+    this.botResponse.classList.toggle('bot-streaming', active);
   }
 
   /**
@@ -169,11 +219,30 @@ class WebsocketClientApp {
             this.setupMediaTracks();
           },
           onUserTranscript: (data) => {
-            if (data.final) {
-              this.log(`User: ${data.text}`);
+            if (!data.final) {
+              this.setUserSpeaking(true);
+            } else {
+              this.scheduleUserStop();
             }
           },
-          onBotTranscript: (data) => this.log(`Bot: ${data.text}`),
+          onBotTranscript: (data) => {
+            if (this.botResponse) {
+              if (this.botResponse.classList.contains('bot-response-placeholder')) {
+                this.botResponse.classList.remove('bot-response-placeholder');
+              }
+              const isFinal = (data as any).final === true || (data as any).is_final === true || (data as any).done === true;
+              if (isFinal) {
+                this.setBotStreaming(false);
+                if (data.text !== this.lastBotFinal) {
+                  this.lastBotFinal = data.text;
+                  this.animateFinalResponse(data.text);
+                }
+              } else {
+                this.setBotStreaming(true);
+                this.botResponse.textContent = data.text;
+              }
+            }
+          },
           onMessageError: (error) => console.error('Message error:', error),
           onError: (error) => console.error('Error:', error),
         },
@@ -183,10 +252,10 @@ class WebsocketClientApp {
       window.pcClient = this.pcClient; // Expose for debugging
       this.setupTrackListeners();
 
-      this.log('Initializing devices...');
+  this.log('Initializing devices...');
       await this.pcClient.initDevices();
 
-      this.log('Connecting to bot...');
+  this.log('Connecting to bot...');
       const endpoint = 'http://localhost:7860/connect';
       this.log(`Fetching connect endpoint: ${endpoint}`);
       await this.pcClient.startBotAndConnect({
@@ -194,19 +263,19 @@ class WebsocketClientApp {
       });
 
       const timeTaken = Date.now() - startTime;
-      this.log(`Connection complete, timeTaken: ${timeTaken}`);
+  this.log(`Connection complete, timeTaken: ${timeTaken}`);
     } catch (error) {
-      this.log(`Error connecting: ${(error as Error).message}`);
+  this.log(`Error connecting: ${(error as Error).message}`);
       this.updateStatus('Error');
       // Clean up if there's an error
       if (this.pcClient) {
         try {
           await this.pcClient.disconnect();
         } catch (disconnectError) {
-          this.log(`Error during disconnect: ${disconnectError}`);
+    this.log(`Error during disconnect: ${disconnectError}`);
         }
       } else {
-        this.log('Skip disconnect: client was not initialized');
+    this.log('Skip disconnect: client was not initialized');
       }
     }
   }
