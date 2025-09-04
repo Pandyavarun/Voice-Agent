@@ -1,61 +1,141 @@
-# ✈️ Indigo Voice Airlines Agent
+# Voice Agent
 
-A simple AI Voice Agent designed to assist with Indigo Airlines queries, built using the Pipecat framework. This agent uses WebRTC for real-time, peer-to-peer voice communication directly from your browser.
+Interactive real‑time voice/chat demo using [Pipecat](https://github.com/pipecat-ai) with a FastAPI (or raw websocket) backend and a Vite + TypeScript browser client. The bot streams audio responses using Gemini Multimodal Live and handles bi‑directional audio + transcripts over websockets.
 
-## 🚀 Quick Start (Local Setup)
+---
+## ✨ Features
+* FastAPI WebSocket endpoint (`/ws`) with optional standalone websocket server mode
+* Live microphone streaming, VAD (Silero) based turn detection
+* Gemini Multimodal Live LLM with configurable voice (Puck, Aoede, etc.)
+* Context aggregation + initial system + user priming message
+* Real‑time user + bot transcript logging in the browser
+* Simple connect / disconnect controls
 
-This guide will get your Indigo Voice Agent running on your local machine, allowing you to interact with it directly from your web browser.
+---
+## � Project Structure
+```
+server/        Python backend (FastAPI + optional raw websocket server)
+client/        Vite + TypeScript front-end
+.env           (create from env.example – not committed)
+```
 
-### 1️⃣ Start the Agent Server
+---
+## 🔑 Prerequisites
+* Python 3.10+
+* Node.js 18+ (recommended; 16+ may work but 18+ aligns with modern toolchains)
+* A Google Gemini API key (`GOOGLE_API_KEY`)
 
-The server handles the core AI logic (Speech-to-Text, Language Model, Text-to-Speech) and manages the WebRTC connection.
-
-#### 🔧 Set Up the Environment
-
-1.  **Clone this Repository:**
-    If you haven't already, clone this repository to your local machine:
-    ```bash
-    git clone [https://github.com/your-username/your-repo-name.git](https://github.com/your-username/your-repo-name.git) # Replace with your actual repo URL
-    cd your-repo-name
-    ```
-
-2.  **Navigate to the Server Directory:**
-    The main server logic (`server.py`, `bot-openai.py`, `requirements.txt`) is located here:
-    ```bash
-    cd server
-    ```
-    *(Note: If you structured your repo differently, adjust this path.)*
-
-3.  **Create & Activate a Python Virtual Environment:**
-    This isolates your project's dependencies.
-    ```bash
-    python -m venv venv
-    .\venv\Scripts\activate # On Windows
-    # On macOS/Linux: source venv/bin/activate
-    ```
-
-4.  **Install Python Dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-    *(This command installs all necessary libraries, including `pipecat-ai[webrtc]` which is essential for the WebRTC transport).*
-
-5.  **Configure API Keys:**
-    The agent needs API keys for its AI services (like voice recognition, AI responses, and voice synthesis).
-    * Copy the example environment file:
-        ```bash
-        cp env.example .env
-        ```
-    * Open the newly created `.env` file in a text editor (e.g., VS Code).
-    * **Add your actual API keys** for services such as:
-        * `OPENAI_API_KEY` (or `GEMINI_API_KEY` if using a Google Gemini bot)
-        * `DEEPGRAM_API_KEY` (for Speech-to-Text)
-        * `CARTESIA_API_KEY` (for Text-to-Speech)
-        * *(Refer to the `env.example` for all required variables).*
-
-#### ▶️ Run the Server
-
-Once your environment is set up and `.env` is configured, start the server:
+---
+## ⚙️ 1. Server Setup (run this first)
+From repository root:
 
 ```bash
-python server.py
+python3 -m venv venv
+source venv/bin/activate            # Windows: venv\Scripts\activate
+pip install --upgrade pip
+pip install -r server/requirements.txt
+```
+
+Create your environment file:
+```bash
+cp server/env.example .env
+```
+Edit `.env` and set at minimum:
+```
+GOOGLE_API_KEY=your_key_here
+# Select backend mode: fast_api | websocket_server
+WEBSOCKET_SERVER=fast_api
+```
+
+Start the server (always do this before opening the client):
+```bash
+python server/server.py
+```
+
+Default endpoints:
+* Health check: `GET http://localhost:7860/health`
+* WebSocket (FastAPI mode): `ws://localhost:7860/ws`
+* Connection bootstrap: `POST http://localhost:7860/connect` (returns the ws URL the client should use)
+* Raw websocket mode (if `WEBSOCKET_SERVER=websocket_server`): separate internal server on `ws://localhost:8765`
+
+Mode logic: The FastAPI app always runs on port 7860. If `WEBSOCKET_SERVER=websocket_server`, an additional Pipecat websocket server starts (8765) and `/connect` tells the client to use that URL instead of `/ws`.
+
+---
+## 🖥 2. Client Setup & Run
+In a second terminal:
+```bash
+cd client
+npm install
+npm run dev
+```
+
+Open the printed Vite dev URL (typically `http://localhost:5173`). Then:
+1. Allow microphone permission when prompted.
+2. Click **Connect** – the client calls `http://localhost:7860/connect` to get the appropriate websocket URL.
+3. Speak; user and bot transcripts + timing appear in the debug panel. Audio responses auto‑play.
+4. Click **Disconnect** to end the session.
+
+Build production bundle (optional):
+```bash
+npm run build
+```
+Preview production build:
+```bash
+npm run preview
+```
+
+---
+## 🔄 Changing Voice or Behavior
+Edit `voice_id` or the `SYSTEM_INSTRUCTION` strings in:
+* `server/bot_fast_api.py`
+* `server/bot_websocket_server.py`
+
+Restart the server after changes.
+
+---
+## 🧪 Quick Smoke Test Checklist
+| Step | Expectation |
+|------|-------------|
+| Server start | Logs show uvicorn running on 0.0.0.0:7860 |
+| Health check | `{"status":"ok"}` |
+| Connect click | Status transitions Disconnected → Connected |
+| Speak | User transcript lines (blue) appear |
+| Bot reply | Bot transcript lines (green) + audible response |
+
+---
+## � Troubleshooting
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| 401 / auth errors | Missing or bad `GOOGLE_API_KEY` | Re‑set key in `.env`, restart server |
+| No audio from bot | Mic blocked or track not attached | Allow mic, check console for track setup logs |
+| Connect stays pending | Wrong port or server not started | Ensure `python server/server.py` is running first |
+| CORS errors | Server not allowing origin | CORS wildcard is already enabled; confirm you use `http://localhost:*` |
+| Websocket closes immediately | Using wrong mode URL | Confirm value of `WEBSOCKET_SERVER` and `/connect` response |
+
+View browser console + server logs for stack traces.
+
+---
+## � Environment Variables Reference
+| Name | Required | Description |
+|------|----------|-------------|
+| GOOGLE_API_KEY | Yes | Gemini API key for LLM & audio streaming |
+| WEBSOCKET_SERVER | No | `fast_api` (default) or `websocket_server` (enables raw server on :8765) |
+
+---
+## 🚀 Extending
+Ideas:
+* Inject additional context turns (modify `OpenAILLMContext` init list)
+* Add sentiment or latency metrics via observers
+* Cache conversation history server‑side
+* Switch to another supported LLM service
+
+---
+## 🧹 Housekeeping
+`.gitignore` excludes local env, build, and media artifacts. Commit only `env.example`, never your real `.env`.
+
+---
+## 📜 License
+BSD 2‑Clause (see headers in source files).
+
+---
+Happy building! �
