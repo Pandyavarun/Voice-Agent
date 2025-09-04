@@ -138,4 +138,4 @@ Ideas:
 BSD 2‑Clause (see headers in source files).
 
 ---
-Happy building! �
+Happy building! 
